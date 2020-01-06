@@ -120,7 +120,7 @@ class Timer(object):
 
 # Defined in file: ./chapter_linear-networks/linear-regression-scratch.md
 def synthetic_data(w, b, num_examples):
-    """generate y = X w + b + noise"""
+    """Generate y = X w + b + noise."""
     X = np.random.normal(0, 1, (num_examples, len(w)))
     y = np.dot(X, w) + b
     y += np.random.normal(0, 0.01, y.shape)
@@ -214,7 +214,7 @@ def evaluate_accuracy(net, data_iter):
 
 # Defined in file: ./chapter_linear-networks/softmax-regression-scratch.md
 class Accumulator(object):
-    """Sum a list of numbers over time"""
+    """Sum a list of numbers over time."""
 
     def __init__(self, n):
         self.data = [0.0] * n
@@ -309,7 +309,7 @@ def predict_ch3(net, test_iter, n=6):
 
 # Defined in file: ./chapter_multilayer-perceptrons/underfit-overfit.md
 def evaluate_loss(net, data_iter, loss):
-    """Evaluate the loss of a model on the given dataset"""
+    """Evaluate the loss of a model on the given dataset."""
     metric = d2l.Accumulator(2)  # sum_loss, num_examples
     for X, y in data_iter:
         metric.add(loss(net(X), y).sum(), y.size)
@@ -318,6 +318,9 @@ def evaluate_loss(net, data_iter, loss):
 
 # Defined in file: ./chapter_multilayer-perceptrons/kaggle-house-price.md
 DATA_HUB = dict()
+
+
+# Defined in file: ./chapter_multilayer-perceptrons/kaggle-house-price.md
 DATA_URL = 'http://d2l-data.s3-accelerate.amazonaws.com/'
 
 
@@ -361,6 +364,9 @@ def download_all():
 DATA_HUB['kaggle_house_train'] = (
     DATA_URL+'kaggle_house_pred_train.csv',
     '585e9cc93e70b39160e7921475f9bcd7d31219ce')
+
+
+# Defined in file: ./chapter_multilayer-perceptrons/kaggle-house-price.md
 DATA_HUB['kaggle_house_test'] = (
     DATA_URL+'kaggle_house_pred_test.csv',
     'fa19780a7b011d9b009e8bff8e99922a8ee2eb90')
@@ -431,7 +437,7 @@ def train_ch5(net, train_iter, test_iter, num_epochs, lr, ctx=d2l.try_gpu()):
         animator.add(epoch+1, (None, None, test_acc))
     print('loss %.3f, train acc %.3f, test acc %.3f' % (
         train_loss, train_acc, test_acc))
-    print('%.1f exampes/sec on %s' % (metric[2]*num_epochs/timer.sum(), ctx))
+    print('%.1f examples/sec on %s' % (metric[2]*num_epochs/timer.sum(), ctx))
 
 
 # Defined in file: ./chapter_convolutional-modern/resnet.md
@@ -460,23 +466,17 @@ class Residual(nn.Block):
 # Defined in file: ./chapter_recurrent-neural-networks/text-preprocessing.md
 d2l.DATA_HUB['time_machine'] = (d2l.DATA_URL+'timemachine.txt',
                                '090b5e7e70c295757f55df93cb0a180b9691891a')
-def read_time_machine():
-    """Load the time machine book into a list of sentences."""
-    with open(d2l.download('time_machine'), 'r') as f:
-        lines = f.readlines()
-    return [re.sub('[^A-Za-z]+', ' ', line.strip().lower())
-            for line in lines]
 
 
 # Defined in file: ./chapter_recurrent-neural-networks/text-preprocessing.md
 def tokenize(lines, token='word'):
-    """Split sentences into word or char tokens"""
+    """Split sentences into word or char tokens."""
     if token == 'word':
         return [line.split(' ') for line in lines]
     elif token == 'char':
         return [list(line) for line in lines]
     else:
-        print('ERROR: unkown token type '+token)
+        print('ERROR: unknown token type '+token)
 
 
 # Defined in file: ./chapter_recurrent-neural-networks/text-preprocessing.md
@@ -572,7 +572,7 @@ def seq_data_iter_consecutive(corpus, batch_size, num_steps):
 
 # Defined in file: ./chapter_recurrent-neural-networks/lang-model.md
 class SeqDataLoader(object):
-    """A iterator to load sequence data"""
+    """A iterator to load sequence data."""
     def __init__(self, batch_size, num_steps, use_random_iter, max_tokens):
         if use_random_iter:
             self.data_iter_fn = d2l.seq_data_iter_random
@@ -595,7 +595,7 @@ def load_data_time_machine(batch_size, num_steps, use_random_iter=False,
 
 # Defined in file: ./chapter_recurrent-neural-networks/rnn-scratch.md
 class RNNModelScratch(object):
-    """A RNN Model based on scratch implementations"""
+    """A RNN Model based on scratch implementations."""
 
     def __init__(self, vocab_size, num_hiddens, ctx,
                  get_params, init_state, forward):
@@ -720,6 +720,9 @@ class RNNModel(nn.Block):
 # Defined in file: ./chapter_recurrent-modern/machine-translation.md
 d2l.DATA_HUB['fra-eng'] = (d2l.DATA_URL+'fra-eng.zip',
                           '94646ad1522d915e7b0f9296181140edcf86a4f5')
+
+
+# Defined in file: ./chapter_recurrent-modern/machine-translation.md
 def read_data_nmt():
     data_dir = d2l.download_extract('fra-eng')
     with open(data_dir+'fra.txt', 'r') as f:
@@ -1018,6 +1021,9 @@ def show_trace_2d(f, results):
 # Defined in file: ./chapter_optimization/minibatch-sgd.md
 d2l.DATA_HUB['airfoil'] = (d2l.DATA_URL+'airfoil_self_noise.dat',
                           '76e5be1548fd8222e5074cf0faae75edff8cf93f')
+
+
+# Defined in file: ./chapter_optimization/minibatch-sgd.md
 def get_data_ch11(batch_size=10, n=1500):
     data = np.genfromtxt(d2l.download('airfoil'),
                          dtype=np.float32, delimiter='\t')
@@ -1179,7 +1185,7 @@ def train_ch13(net, train_iter, test_iter, loss, trainer, num_epochs,
         animator.add(epoch+1, (None, None, test_acc))
     print('loss %.3f, train acc %.3f, test acc %.3f' % (
         metric[0]/metric[2], metric[1]/metric[3], test_acc))
-    print('%.1f exampes/sec on %s' % (
+    print('%.1f examples/sec on %s' % (
         metric[2]*num_epochs/timer.sum(), ctx_list))
 
 
@@ -1228,7 +1234,7 @@ d2l.DATA_HUB['pikachu'] = (d2l.DATA_URL+'pikachu.zip',
 
 # Defined in file: ./chapter_computer-vision/object-detection-dataset.md
 def load_data_pikachu(batch_size, edge_size=256):
-    """Load the pikachu dataset"""
+    """Load the pikachu dataset."""
     data_dir = d2l.download_extract('pikachu')
     train_iter = image.ImageDetIter(
         path_imgrec=data_dir+'train.rec',
@@ -1271,6 +1277,9 @@ VOC_COLORMAP = [[0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0],
                 [64, 0, 128], [192, 0, 128], [64, 128, 128], [192, 128, 128],
                 [0, 64, 0], [128, 64, 0], [0, 192, 0], [128, 192, 0],
                 [0, 64, 128]]
+
+
+# Defined in file: ./chapter_computer-vision/semantic-segmentation-and-dataset.md
 VOC_CLASSES = ['background', 'aeroplane', 'bicycle', 'bird', 'boat',
                'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
                'diningtable', 'dog', 'horse', 'motorbike', 'person',
@@ -1279,7 +1288,7 @@ VOC_CLASSES = ['background', 'aeroplane', 'bicycle', 'bird', 'boat',
 
 # Defined in file: ./chapter_computer-vision/semantic-segmentation-and-dataset.md
 def build_colormap2label():
-    """Build a RGB color to label mapping for segmentation."""
+    """Build an RGB color to label mapping for segmentation."""
     colormap2label = np.zeros(256 ** 3)
     for i, colormap in enumerate(VOC_COLORMAP):
         colormap2label[(colormap[0]*256 + colormap[1])*256 + colormap[2]] = i
@@ -1288,7 +1297,7 @@ def build_colormap2label():
 
 # Defined in file: ./chapter_computer-vision/semantic-segmentation-and-dataset.md
 def voc_label_indices(colormap, colormap2label):
-    """Map a RGB color to a label."""
+    """Map an RGB color to a label."""
     colormap = colormap.astype(np.int32)
     idx = ((colormap[:, :, 0] * 256 + colormap[:, :, 1]) * 256
            + colormap[:, :, 2])
@@ -1414,6 +1423,9 @@ d2l.DATA_HUB['dog_tiny'] = (d2l.DATA_URL+'kaggle_dog_tiny.zip',
 # Defined in file: ./chapter_natural-language-processing/word2vec-dataset.md
 d2l.DATA_HUB['ptb'] = (d2l.DATA_URL+'ptb.zip', 
                       '319d85e578af0cdc590547f26231e4e31cdf1e42')
+
+
+# Defined in file: ./chapter_natural-language-processing/word2vec-dataset.md
 def read_ptb():
     data_dir = d2l.download_extract('ptb')
     with open(data_dir+'ptb.train.txt') as f:
@@ -1460,7 +1472,7 @@ def get_centers_and_contexts(corpus, max_window_size):
 
 # Defined in file: ./chapter_natural-language-processing/word2vec-dataset.md
 class RandomGenerator(object):
-    """Draw a random int in [0, n] according to n sampling weights"""
+    """Draw a random int in [0, n] according to n sampling weights."""
     def __init__(self, sampling_weights):
         self.population = list(range(len(sampling_weights)))
         self.sampling_weights = sampling_weights
@@ -1570,6 +1582,9 @@ def predict_sentiment(net, vocab, sentence):
 d2l.DATA_HUB['ml-100k'] = (
     'http://files.grouplens.org/datasets/movielens/ml-100k.zip',
     'cd4dcac4241c8a4ad7badc7ca635da8a69dddb83')
+
+
+# Defined in file: ./chapter_recommender-systems/movielens.md
 def read_data_ml100k():
     data_dir = d2l.download_extract('ml-100k')
     names = ['user_id', 'item_id', 'rating', 'timestamp']
@@ -1831,7 +1846,7 @@ class CTRDataset(gluon.data.Dataset):
 
 # Defined in file: ./chapter_generative-adversarial-networks/gan.md
 def update_D(X, Z, net_D, net_G, loss, trainer_D):
-    """Update discriminator"""
+    """Update discriminator."""
     batch_size = X.shape[0]
     ones = np.ones((batch_size,), ctx=X.context)
     zeros = np.zeros((batch_size,), ctx=X.context)
@@ -1849,7 +1864,7 @@ def update_D(X, Z, net_D, net_G, loss, trainer_D):
 
 # Defined in file: ./chapter_generative-adversarial-networks/gan.md
 def update_G(Z, net_D, net_G, loss, trainer_G):  # saved in d2l
-    """Update generator"""
+    """Update generator."""
     batch_size = Z.shape[0]
     ones = np.ones((batch_size,), ctx=Z.context)
     with autograd.record():

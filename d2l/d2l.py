@@ -916,20 +916,20 @@ def predict_s2s_ch9(model, src_sentence, src_vocab, tgt_vocab, num_steps,
                     ctx):
     src_tokens = src_vocab[src_sentence.lower().split(' ')]
     enc_valid_length = np.array([len(src_tokens)], ctx=ctx)
-    src_tokens = d2l.trim_pad(src_tokens, num_steps, src_vocab.pad)
+    src_tokens = d2l.trim_pad(src_tokens, num_steps, src_vocab['<pad>'])
     enc_X = np.array(src_tokens, ctx=ctx)
     # Add the batch_size dimension
     enc_outputs = model.encoder(np.expand_dims(enc_X, axis=0),
                                 enc_valid_length)
     dec_state = model.decoder.init_state(enc_outputs, enc_valid_length)
-    dec_X = np.expand_dims(np.array([tgt_vocab.bos], ctx=ctx), axis=0)
+    dec_X = np.expand_dims(np.array([tgt_vocab['<bos>']], ctx=ctx), axis=0)
     predict_tokens = []
     for _ in range(num_steps):
         Y, dec_state = model.decoder(dec_X, dec_state)
         # The token with highest score is used as the next timestep input
         dec_X = Y.argmax(axis=2)
         py = dec_X.squeeze(axis=0).astype('int32').item()
-        if py == tgt_vocab.eos:
+        if py == tgt_vocab['<eos>']:
             break
         predict_tokens.append(py)
     return ' '.join(tgt_vocab.to_tokens(predict_tokens))
@@ -1577,6 +1577,88 @@ def predict_sentiment(net, vocab, sentence):
     sentence = np.array(vocab[sentence.split()], ctx=d2l.try_gpu())
     label = np.argmax(net(sentence.reshape(1, -1)), axis=1)
     return 'positive' if label == 1 else 'negative'
+
+
+# Defined in file: ./chapter_natural-language-processing/natural-language-inference-and-dataset.md
+d2l.DATA_HUB['SNLI'] = (
+    'https://nlp.stanford.edu/projects/snli/snli_1.0.zip',
+    '9fcde07509c7e87ec61c640c1b2753d9041758e4')
+
+
+# Defined in file: ./chapter_natural-language-processing/natural-language-inference-and-dataset.md
+def read_snli(data_dir, is_train):
+    def extract_text(s):
+        s = re.sub('\(', '', s) 
+        s = re.sub('\)', '', s) 
+        s = re.sub("\s{2,}", " ", s)
+        return s.strip()
+    label_set = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
+    file_name = data_dir + 'snli_1.0_'+ ('train' if is_train else 'test') + '.txt'
+    with open(file_name, 'r') as f:
+        examples = [row.split('\t') for row in f.readlines()[1:]]
+    premise = [extract_text(row[1]) for row in examples if row[0] in label_set]
+    hypothesis = [extract_text(row[2]) for row in examples if row[0] in label_set]
+    labels = [label_set[row[0]] for row in examples if row[0] in label_set]
+    return premise, hypothesis, labels
+
+
+# Defined in file: ./chapter_natural-language-processing/natural-language-inference-and-dataset.md
+class SNLIDataset(gluon.data.Dataset):
+    def __init__(self, dataset, vocab = None):
+        self.num_steps = 50  # We fix the length of each sentence to 50.
+        p_tokens = d2l.tokenize(dataset[0], token='word')
+        h_tokens = d2l.tokenize(dataset[1], token='word')
+        if vocab is None:
+            self.vocab = d2l.Vocab(p_tokens + h_tokens, min_freq=5)
+        else:
+            self.vocab = vocab
+        self.premise = self.pad(p_tokens)
+        self.hypothesis = self.pad(h_tokens)
+        self.labels = np.array(dataset[2])
+        print('read ' + str(len(self.premise)) + ' examples')
+
+    def pad(self, data):
+        return np.array([d2l.trim_pad(self.vocab[line], self.num_steps, 
+                                      self.vocab.unk) for line in data])
+
+    def __getitem__(self, idx):
+        return (self.premise[idx], self.hypothesis[idx]), self.labels[idx]
+
+    def __len__(self):
+        return len(self.premise)
+
+
+# Defined in file: ./chapter_natural-language-processing/natural-language-inference-and-dataset.md
+def load_data_snli(batch_size, num_steps=50):
+    data_dir = d2l.download_extract('SNLI')
+    train_data = read_snli(data_dir, True)
+    test_data = read_snli(data_dir, False)
+    train_set = SNLIDataset(train_data)
+    test_set = SNLIDataset(test_data, train_set.vocab)
+    train_iter = gluon.data.DataLoader(train_set, batch_size, shuffle=True)
+    test_iter = gluon.data.DataLoader(test_set, batch_size, shuffle=False)
+
+    return train_iter, test_iter, train_set.vocab
+
+
+# Defined in file: ./chapter_natural-language-processing/decomposable-attention-model.md
+def split_batch_multi_inputs(X, y, ctx_list):
+    """Split X and y into multiple devices specified by ctx"""
+    X = list(zip(*[gluon.utils.split_and_load(feature, ctx_list, even_split=False)
+                   for feature in X]))
+    return (X, gluon.utils.split_and_load(y, ctx_list, even_split=False))
+
+
+# Defined in file: ./chapter_natural-language-processing/decomposable-attention-model.md
+def predict_snli(net, premise, hypothesis):
+    premise = np.array(vocab[premise],
+                       ctx=d2l.try_gpu())
+    hypothesis = np.array(vocab[hypothesis],
+                          ctx=d2l.try_gpu())
+    label = np.argmax(net([premise.reshape((1, -1)),
+                           hypothesis.reshape((1, -1))]), axis=1)
+    return 'neutral' if label == 0 else 'contradiction' if label == 1 \
+            else 'entailment'
 
 
 # Defined in file: ./chapter_recommender-systems/movielens.md

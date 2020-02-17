@@ -734,14 +734,12 @@ def read_data_nmt():
 
 # Defined in file: ./chapter_recurrent-modern/machine-translation.md
 def preprocess_nmt(text):
-    text = text.replace('\u202f', ' ').replace('\xa0', ' ')
-
     def no_space(char, prev_char):
-        return (True if char in (',', '!', '.')
-                and prev_char != ' ' else False)
-    
-    out = [' '+char if i > 0 and no_space(char, text[i-1]) else char
-           for i, char in enumerate(text.lower())]
+        return char in set(',.!') and prev_char != ' '
+
+    text = text.replace('\u202f', ' ').replace('\xa0', ' ').lower()
+    out = [' ' + char if i > 0 and no_space(char, text[i-1]) else char
+           for i, char in enumerate(text)]
     return ''.join(out)
 
 
@@ -763,7 +761,6 @@ def trim_pad(line, num_steps, padding_token):
     if len(line) > num_steps:
         return line[:num_steps]  # Trim
     return line + [padding_token] * (num_steps - len(line))  # Pad
-
 
 
 # Defined in file: ./chapter_recurrent-modern/machine-translation.md

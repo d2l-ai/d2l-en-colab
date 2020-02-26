@@ -872,11 +872,11 @@ class Seq2SeqDecoder(d2l.Decoder):
 class MaskedSoftmaxCELoss(gluon.loss.SoftmaxCELoss):
     # pred shape: (batch_size, seq_len, vocab_size)
     # label shape: (batch_size, seq_len)
-    # valid_length shape: (batch_size, )
-    def forward(self, pred, label, valid_length):
+    # valid_len shape: (batch_size, )
+    def forward(self, pred, label, valid_len):
         # weights shape: (batch_size, seq_len, 1)
         weights = np.expand_dims(np.ones_like(label), axis=-1)
-        weights = npx.sequence_mask(weights, valid_length, True, axis=1)
+        weights = npx.sequence_mask(weights, valid_len, True, axis=1)
         return super(MaskedSoftmaxCELoss, self).forward(pred, label, weights)
 
 
@@ -912,13 +912,13 @@ def train_s2s_ch9(model, data_iter, lr, num_epochs, ctx):
 def predict_s2s_ch9(model, src_sentence, src_vocab, tgt_vocab, num_steps,
                     ctx):
     src_tokens = src_vocab[src_sentence.lower().split(' ')]
-    enc_valid_length = np.array([len(src_tokens)], ctx=ctx)
+    enc_valid_len = np.array([len(src_tokens)], ctx=ctx)
     src_tokens = d2l.trim_pad(src_tokens, num_steps, src_vocab['<pad>'])
     enc_X = np.array(src_tokens, ctx=ctx)
     # Add the batch_size dimension
     enc_outputs = model.encoder(np.expand_dims(enc_X, axis=0),
-                                enc_valid_length)
-    dec_state = model.decoder.init_state(enc_outputs, enc_valid_length)
+                                enc_valid_len)
+    dec_state = model.decoder.init_state(enc_outputs, enc_valid_len)
     dec_X = np.expand_dims(np.array([tgt_vocab['<bos>']], ctx=ctx), axis=0)
     predict_tokens = []
     for _ in range(num_steps):
@@ -933,18 +933,18 @@ def predict_s2s_ch9(model, src_sentence, src_vocab, tgt_vocab, num_steps,
 
 
 # Defined in file: ./chapter_attention-mechanisms/attention.md
-def masked_softmax(X, valid_length):
-    # X: 3-D tensor, valid_length: 1-D or 2-D tensor
-    if valid_length is None:
+def masked_softmax(X, valid_len):
+    # X: 3-D tensor, valid_len: 1-D or 2-D tensor
+    if valid_len is None:
         return npx.softmax(X)
     else:
         shape = X.shape
-        if valid_length.ndim == 1:
-            valid_length = valid_length.repeat(shape[1], axis=0)
+        if valid_len.ndim == 1:
+            valid_len = valid_len.repeat(shape[1], axis=0)
         else:
-            valid_length = valid_length.reshape(-1)
+            valid_len = valid_len.reshape(-1)
         # Fill masked elements with a large negative, whose exp is 0
-        X = npx.sequence_mask(X.reshape(-1, shape[-1]), valid_length, True,
+        X = npx.sequence_mask(X.reshape(-1, shape[-1]), valid_len, True,
                               axis=1, value=-1e6)
         return npx.softmax(X).reshape(shape)
 
@@ -958,17 +958,17 @@ class DotProductAttention(nn.Block):
     # query: (batch_size, #queries, d)
     # key: (batch_size, #kv_pairs, d)
     # value: (batch_size, #kv_pairs, dim_v)
-    # valid_length: either (batch_size, ) or (batch_size, xx)
-    def forward(self, query, key, value, valid_length=None):
+    # valid_len: either (batch_size, ) or (batch_size, xx)
+    def forward(self, query, key, value, valid_len=None):
         d = query.shape[-1]
         # Set transpose_b=True to swap the last two dimensions of key
         scores = npx.batch_dot(query, key, transpose_b=True) / math.sqrt(d)
-        attention_weights = self.dropout(masked_softmax(scores, valid_length))
+        attention_weights = self.dropout(masked_softmax(scores, valid_len))
         return npx.batch_dot(attention_weights, value)
 
 
 # Defined in file: ./chapter_attention-mechanisms/attention.md
-class MLPAttention(nn.Block):  
+class MLPAttention(nn.Block):
     def __init__(self, units, dropout, **kwargs):
         super(MLPAttention, self).__init__(**kwargs)
         # Use flatten=True to keep query's and key's 3-D shapes
@@ -979,13 +979,13 @@ class MLPAttention(nn.Block):
         self.v = nn.Dense(1, use_bias=False, flatten=False)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, query, key, value, valid_length):
+    def forward(self, query, key, value, valid_len):
         query, key = self.W_k(query), self.W_q(key)
         # Expand query to (batch_size, #querys, 1, units), and key to
         # (batch_size, 1, #kv_pairs, units). Then plus them with broadcast
         features = np.expand_dims(query, axis=2) + np.expand_dims(key, axis=1)
         scores = np.squeeze(self.v(features), axis=-1)
-        attention_weights = self.dropout(masked_softmax(scores, valid_length))
+        attention_weights = self.dropout(masked_softmax(scores, valid_len))
         return npx.batch_dot(attention_weights, value)
 
 
@@ -1000,10 +1000,10 @@ class MultiHeadAttention(nn.Block):
         self.W_v = nn.Dense(num_hiddens, use_bias=False, flatten=False)
         self.W_o = nn.Dense(num_hiddens, use_bias=False, flatten=False)
 
-    def forward(self, query, key, value, valid_length):
+    def forward(self, query, key, value, valid_len):
         # For self-attention, query, key, and value shape:
         # (batch_size, seq_len, dim), where seq_len is the length of input
-        # sequence. valid_length shape is either (batch_size, ) or
+        # sequence. valid_len shape is either (batch_size, ) or
         # (batch_size, seq_len).
 
         # Project and transpose query, key, and value from
@@ -1013,16 +1013,16 @@ class MultiHeadAttention(nn.Block):
         key = transpose_qkv(self.W_k(key), self.num_heads)
         value = transpose_qkv(self.W_v(value), self.num_heads)
 
-        if valid_length is not None:
-            # Copy valid_length by num_heads times
-            if valid_length.ndim == 1:
-                valid_length = np.tile(valid_length, self.num_heads)
+        if valid_len is not None:
+            # Copy valid_len by num_heads times
+            if valid_len.ndim == 1:
+                valid_len = np.tile(valid_len, self.num_heads)
             else:
-                valid_length = np.tile(valid_length, (self.num_heads, 1))
+                valid_len = np.tile(valid_len, (self.num_heads, 1))
 
         # For self-attention, output shape:
         # (batch_size * num_heads, seq_len, num_hiddens / num_heads)
-        output = self.attention(query, key, value, valid_length)
+        output = self.attention(query, key, value, valid_len)
 
         # output_concat shape: (batch_size, seq_len, num_hiddens)
         output_concat = transpose_output(output, self.num_heads)
@@ -1033,7 +1033,7 @@ class MultiHeadAttention(nn.Block):
 def transpose_qkv(X, num_heads):
     # Input X shape: (batch_size, seq_len, num_hiddens).
     # Output X shape:
-    # (batch_size, seq_len, num_heads, num_hiddens / num_heads)    
+    # (batch_size, seq_len, num_heads, num_hiddens / num_heads)
     X = X.reshape(X.shape[0], X.shape[1], num_heads, -1)
 
     # X shape: (batch_size, num_heads, seq_len, num_hiddens / num_heads)
@@ -1103,8 +1103,8 @@ class EncoderBlock(nn.Block):
         self.ffn = PositionWiseFFN(pw_num_hiddens, embed_size)
         self.addnorm2 = AddNorm(dropout)
 
-    def forward(self, X, valid_length):
-        Y = self.addnorm1(X, self.attention(X, X, X, valid_length))
+    def forward(self, X, valid_len):
+        Y = self.addnorm1(X, self.attention(X, X, X, valid_len))
         return self.addnorm2(Y, self.ffn(Y))
 
 
@@ -1121,10 +1121,10 @@ class TransformerEncoder(d2l.Encoder):
             self.blks.add(
                 EncoderBlock(embed_size, pw_num_hiddens, num_heads, dropout))
 
-    def forward(self, X, valid_length, *args):
+    def forward(self, X, valid_len, *args):
         X = self.pos_encoding(self.embedding(X) * math.sqrt(self.embed_size))
         for blk in self.blks:
-            X = blk(X, valid_length)
+            X = blk(X, valid_len)
         return X
 
 
@@ -1684,13 +1684,13 @@ class BERTEncoder(nn.Block):
             self.blks.add(d2l.EncoderBlock(
                 embed_size, pw_num_hiddens, num_heads, dropout))
 
-    def forward(self, tokens, segments, valid_length):
+    def forward(self, tokens, segments, valid_len):
         # Shape of X remains unchanged in the following code snippet:
         # (batch size, max sequence length, embed_size)
         X = self.token_embedding(tokens) + self.segment_embedding(segments)
         X = self.pos_encoding(X)
         for blk in self.blks:
-            X = blk(X, valid_length)
+            X = blk(X, valid_len)
         return X
 
 
@@ -1743,9 +1743,9 @@ class BERTModel(nn.Block):
         self.nsp = NextSentencePred(embed_size)
         self.mlm = MaskLM(vocab_size, embed_size)
 
-    def forward(self, tokens, segments, valid_length=None,
+    def forward(self, tokens, segments, valid_len=None,
                 masked_positions=None):
-        X = self.encoder(tokens, segments, valid_length)
+        X = self.encoder(tokens, segments, valid_len)
         if masked_positions is not None:
             mlm_Y = self.mlm(X, masked_positions)
         else:
@@ -1796,13 +1796,13 @@ def get_tokens_and_segments(tokens_a, tokens_b):
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
-def get_nsp_data_from_doc(doc, all_docs, vocab, max_length):
+def get_nsp_data_from_doc(doc, all_docs, vocab, max_len):
     nsp_data_from_doc = []
     for i in range(len(doc) - 1):
         tokens_a, tokens_b, is_next = get_next_sentence(
             doc[i], doc[i + 1], all_docs)
         # Consider 1 '[CLS]' token and 2 '[SEP]' tokens
-        if len(tokens_a) + len(tokens_b) + 3 > max_length:
+        if len(tokens_a) + len(tokens_b) + 3 > max_len:
              continue
         tokens, segment_ids = get_tokens_and_segments(tokens_a, tokens_b)
         nsp_data_from_doc.append((tokens, segment_ids, is_next))
@@ -1819,7 +1819,6 @@ def replace_mlm_tokens(tokens, candidate_mlm_pred_positions, num_mlm_preds,
     # Shuffle for gettting 15% random tokens for prediction in the masked
     # language model task
     random.shuffle(candidate_mlm_pred_positions)
-
     for mlm_pred_position in candidate_mlm_pred_positions:
         if len(mlm_pred_positions_and_labels) >= num_mlm_preds:
             break
@@ -1849,33 +1848,31 @@ def create_mlm_data_from_tokens(tokens, vocab):
         if token in ['[CLS]', '[SEP]']:
             continue
         candidate_mlm_pred_positions.append(i)
-    # 15% of random tokens will be predicted in the masked language model task 
+    # 15% of random tokens will be predicted in the masked language model task
     num_mlm_preds = max(1, int(round(len(tokens) * 0.15)))
-    output_tokens, mlm_pred_positions_and_labels = replace_mlm_tokens(
+    mlm_input_tokens, mlm_pred_positions_and_labels = replace_mlm_tokens(
         tokens, candidate_mlm_pred_positions, num_mlm_preds, vocab)
-
     mlm_pred_positions_and_labels = sorted(mlm_pred_positions_and_labels,
                                            key=lambda x: x[0])
-    mlm_pred_positions = []
-    mlm_pred_labels = []
-    for mlm_pred_position, mlm_pred_label in mlm_pred_positions_and_labels:
-        mlm_pred_positions.append(mlm_pred_position)
-        mlm_pred_labels.append(mlm_pred_label)
-    return vocab[output_tokens], mlm_pred_positions, vocab[mlm_pred_labels]
+    # e.g., [[1, 'an'], [12, 'car'], [25, '<unk>']] -> [1, 12, 25]
+    mlm_pred_positions = list(list(zip(*mlm_pred_positions_and_labels))[0])
+    # e.g., [[1, 'an'], [12, 'car'], [25, '<unk>']] -> ['an', 'car', '<unk>']
+    mlm_pred_labels = list(list(zip(*mlm_pred_positions_and_labels))[1])
+    return vocab[mlm_input_tokens], mlm_pred_positions, vocab[mlm_pred_labels]
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
-def convert_numpy(instances, max_length):
+def convert_numpy(instances, max_len):
     input_ids, segment_ids, masked_lm_positions, masked_lm_ids = [], [], [], []
-    masked_lm_weights, next_sentence_labels, valid_lengths = [], [], []
+    masked_lm_weights, next_sentence_labels, valid_lens = [], [], []
     for instance in instances:
-        input_id = instance[0] + [0] * (max_length - len(instance[0]))
-        segment_id = instance[3] + [0] * (max_length - len(instance[3]))
+        input_id = instance[0] + [0] * (max_len - len(instance[0]))
+        segment_id = instance[3] + [0] * (max_len - len(instance[3]))
         masked_lm_position = instance[1] + [0] * (20 - len(instance[1]))
         masked_lm_id = instance[2] + [0] * (20 - len(instance[2]))
         masked_lm_weight = [1.0] * len(instance[2]) + [0.0] * (20 - len(instance[1]))
         next_sentence_label = instance[4]
-        valid_length = len(instance[0])
+        valid_len = len(instance[0])
 
         input_ids.append(np.array(input_id, dtype='int32'))
         segment_ids.append(np.array(segment_id, dtype='int32'))
@@ -1883,40 +1880,40 @@ def convert_numpy(instances, max_length):
         masked_lm_ids.append(np.array(masked_lm_id, dtype='int32'))
         masked_lm_weights.append(np.array(masked_lm_weight, dtype='float32'))
         next_sentence_labels.append(np.array(next_sentence_label))
-        valid_lengths.append(np.array(valid_length))
+        valid_lens.append(np.array(valid_len))
     return input_ids, masked_lm_ids, masked_lm_positions, masked_lm_weights,\
-           next_sentence_labels, segment_ids, valid_lengths
+           next_sentence_labels, segment_ids, valid_lens
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
-def create_training_instances(train_data, vocab, max_length):
+def create_training_instances(train_data, vocab, max_len):
     instances = []
     for i, doc in enumerate(train_data):
-        instances.extend(get_nsp_data_from_doc(doc, train_data, vocab, max_length))
+        instances.extend(get_nsp_data_from_doc(doc, train_data, vocab, max_len))
     instances = [(create_mlm_data_from_tokens(tokens, vocab) + (segment_ids, is_random_next))
                  for (tokens, segment_ids, is_random_next) in instances]
     input_ids, masked_lm_ids, masked_lm_positions, masked_lm_weights,\
-           next_sentence_labels, segment_ids, valid_lengths = convert_numpy(instances, max_length)
+           next_sentence_labels, segment_ids, valid_lens = convert_numpy(instances, max_len)
     return input_ids, masked_lm_ids, masked_lm_positions, masked_lm_weights,\
-           next_sentence_labels, segment_ids, valid_lengths
+           next_sentence_labels, segment_ids, valid_lens
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
 class WikiDataset(gluon.data.Dataset):
-    def __init__(self, dataset, max_length = 128):
+    def __init__(self, dataset, max_len=128):
         train_tokens = [d2l.tokenize(row, token='word') for row in dataset]
-        
+
         text_list=[]
         [text_list.extend(row) for row in train_tokens]
-        self.vocab = d2l.Vocab(text_list, min_freq=5, 
+        self.vocab = d2l.Vocab(text_list, min_freq=5,
                                reserved_tokens=['[MASK]', '[CLS]', '[SEP]'])
         self.input_ids, self.masked_lm_ids, self.masked_lm_positions,\
         self.masked_lm_weights, self.next_sentence_labels, self.segment_ids,\
-        self.valid_lengths = create_training_instances(train_tokens, self.vocab, max_length)
+        self.valid_lens = create_training_instances(train_tokens, self.vocab, max_len)
 
     def __getitem__(self, idx):
         return self.input_ids[idx], self.masked_lm_ids[idx], self.masked_lm_positions[idx], self.masked_lm_weights[idx],\
-           self.next_sentence_labels[idx], self.segment_ids[idx], self.valid_lengths[idx]
+           self.next_sentence_labels[idx], self.segment_ids[idx], self.valid_lens[idx]
 
     def __len__(self):
         return len(self.input_ids)
@@ -1934,28 +1931,32 @@ def load_data_wiki(batch_size, data_set = 'wikitext-2', num_steps=128):
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
 def _get_batch_bert(batch, ctx):
     (input_id, masked_id, masked_position, masked_weight, \
-     next_sentence_label, segment_id, valid_length) = batch
-    
-    return (gluon.utils.split_and_load(input_id, ctx, even_split=False),
-            gluon.utils.split_and_load(masked_id, ctx, even_split=False),
-            gluon.utils.split_and_load(masked_position, ctx, even_split=False),
-            gluon.utils.split_and_load(masked_weight, ctx, even_split=False),
-            gluon.utils.split_and_load(next_sentence_label, ctx, even_split=False),
-            gluon.utils.split_and_load(segment_id, ctx, even_split=False),
-            gluon.utils.split_and_load(valid_length.astype('float32'), ctx, even_split=False))
+     next_sentence_label, segment_id, valid_len) = batch
+    split_and_load = gluon.utils.split_and_load
+    return (split_and_load(input_id, ctx, even_split=False),
+            split_and_load(masked_id, ctx, even_split=False),
+            split_and_load(masked_position, ctx, even_split=False),
+            split_and_load(masked_weight, ctx, even_split=False),
+            split_and_load(next_sentence_label, ctx, even_split=False),
+            split_and_load(segment_id, ctx, even_split=False),
+            split_and_load(valid_len.astype('float32'), ctx,
+                           even_split=False))
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
-def batch_loss_bert(net, nsp_loss, mlm_loss, input_id, masked_id, masked_position,
-                    masked_weight, next_sentence_label, segment_id, valid_length, vocab_size):
+def batch_loss_bert(net, nsp_loss, mlm_loss, input_id, masked_id,
+                    masked_position, masked_weight, next_sentence_label,
+                    segment_id, valid_len, vocab_size):
     ls = []
     ls_mlm = []
     ls_nsp = []
-    for i_id, m_id, m_pos, m_w, nsl, s_i, v_l in zip(input_id, masked_id, masked_position, masked_weight,\
-                                                      next_sentence_label, segment_id, valid_length):
+    for i_id, m_id, m_pos, m_w, nsl, s_i, v_l in zip(
+        input_id, masked_id, masked_position, masked_weight,
+        next_sentence_label, segment_id, valid_len):
         num_masks = m_w.sum() + 1e-8
         _, decoded, classified = net(i_id, s_i, v_l.reshape(-1),m_pos)
-        l_mlm = mlm_loss(decoded.reshape((-1, vocab_size)),m_id.reshape(-1), m_w.reshape((-1, 1)))
+        l_mlm = mlm_loss(decoded.reshape((-1, vocab_size)),m_id.reshape(-1),
+                         m_w.reshape((-1, 1)))
         l_mlm = l_mlm.sum() / num_masks
         l_nsp = nsp_loss(classified, nsl)
         l_nsp = l_nsp.mean()
@@ -1968,28 +1969,33 @@ def batch_loss_bert(net, nsp_loss, mlm_loss, input_id, masked_id, masked_positio
 
 
 # Defined in file: ./chapter_natural-language-processing-pretraining/bert-pretraining.md
-def train_bert(data_eval, net, nsp_loss, mlm_loss, vocab_size, ctx, log_interval, max_step):
+def train_bert(data_eval, net, nsp_loss, mlm_loss, vocab_size, ctx,
+               log_interval, max_step):
     trainer = gluon.Trainer(net.collect_params(), 'adam')
     step_num = 0
     while step_num < max_step:
         eval_begin_time = time.time()
         begin_time = time.time()
-        
+
         running_mlm_loss = running_nsp_loss = 0
         total_mlm_loss = total_nsp_loss = 0
         running_num_tks = 0
         for _, data_batch in enumerate(data_eval):
             (input_id, masked_id, masked_position, masked_weight, \
-             next_sentence_label, segment_id, valid_length) = _get_batch_bert(data_batch, ctx)
-            
+             next_sentence_label, segment_id, valid_len) = _get_batch_bert(
+                data_batch, ctx)
+
             step_num += 1
             with autograd.record():
-                ls, ls_mlm, ls_nsp = batch_loss_bert(net, nsp_loss, mlm_loss, input_id, masked_id, masked_position, masked_weight, next_sentence_label, segment_id, valid_length, vocab_size)
+                ls, ls_mlm, ls_nsp = batch_loss_bert(
+                    net, nsp_loss, mlm_loss, input_id, masked_id,
+                    masked_position, masked_weight, next_sentence_label,
+                    segment_id, valid_len, vocab_size)
             for l in ls:
                 l.backward()
-            
+
             trainer.step(1)
-            
+
             running_mlm_loss += sum([l for l in ls_mlm])
             running_nsp_loss += sum([l for l in ls_nsp])
 

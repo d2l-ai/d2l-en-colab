@@ -142,6 +142,6 @@
   "heads": [[11, 0, 0]], 
   "attrs": {
     "is_np_shape": ["int", 1], 
-    "mxnet_version": ["int", 10500]
+    "mxnet_version": ["int", 10600]
   }
 }

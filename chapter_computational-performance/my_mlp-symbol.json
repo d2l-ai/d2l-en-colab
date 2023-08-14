@@ -34,6 +34,7 @@
       "op": "FullyConnected", 
       "name": "dense3_fwd", 
       "attrs": {
+        "cublas_algo_fwd_prec": "None", 
         "flatten": "True", 
         "no_bias": "False", 
         "num_hidden": "256"
@@ -75,6 +76,7 @@
       "op": "FullyConnected", 
       "name": "dense4_fwd", 
       "attrs": {
+        "cublas_algo_fwd_prec": "None", 
         "flatten": "True", 
         "no_bias": "False", 
         "num_hidden": "128"
@@ -116,6 +118,7 @@
       "op": "FullyConnected", 
       "name": "dense5_fwd", 
       "attrs": {
+        "cublas_algo_fwd_prec": "None", 
         "flatten": "True", 
         "no_bias": "False", 
         "num_hidden": "2"
@@ -142,6 +145,6 @@
   "heads": [[11, 0, 0]], 
   "attrs": {
     "is_np_shape": ["int", 1], 
-    "mxnet_version": ["int", 10700]
+    "mxnet_version": ["int", 10901]
   }
 }
